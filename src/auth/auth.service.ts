@@ -1,32 +1,29 @@
 import { Injectable } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
-import { ConfigService } from '@nestjs/config';
+import { SecurityService } from '../security/security.service';
+import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class AuthService {
   constructor(
     private usersService: UsersService,
-    private jwtService: JwtService,
-    private configService: ConfigService,
+    private securityService: SecurityService,
   ) {}
 
   async validateUser(email: string, password: string) {
-    return this.usersService.validateUser(email, password);
+    const user = await this.usersService.findByEmail(email);
+    if (!user) return null;
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return null;
+
+    return user;
   }
 
   async login(user: any) {
-    const payload = { email: user.email, sub: user.id };
-    const accessToken = this.jwtService.sign(payload, {
-      secret: this.configService.get<string>('JWT_SECRET'),
-      expiresIn: this.configService.get<string>('JWT_EXPIRES_IN'),
-    });
-
-    const refreshToken = this.jwtService.sign(payload, {
-      secret: this.configService.get<string>('REFRESH_SECRET'),
-      expiresIn: this.configService.get<string>('REFRESH_EXPIRES_IN'),
-    });
-
-    return { accessToken, refreshToken };
+    return {
+      accessToken: this.securityService.generateAccessToken(user),
+      refreshToken: this.securityService.generateRefreshToken(user),
+    };
   }
 }
